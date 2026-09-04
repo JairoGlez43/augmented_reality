@@ -10,6 +10,13 @@
 
 <body>
   <div id="app">
+    <!-- El <video> NO es interfaz: es el decodificador que convierte el
+         MediaStream en frames dibujables. Ahora esta visible para que veas que
+         el stream funciona; en el paso C lo ocultaremos y solo se vera el canvas.
+         autoplay   -> un video pausado no decodifica frames nuevos
+         muted      -> las politicas de autoplay bloquean video con audio
+         playsinline -> sin esto, Safari en iOS lo abre a pantalla completa -->
+    <video id="camera-stream" width="320" autoplay playsinline muted></video>
     <!-- Estructura FIJA: siempre hay exactamente un boton y un mensaje.
          Por eso viven en el HTML y no se crean desde JavaScript.
          El texto de aqui es solo el valor inicial; en cuanto main.ts arranca,

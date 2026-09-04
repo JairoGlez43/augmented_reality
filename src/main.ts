@@ -1,4 +1,4 @@
-import { startCamera, stopCamera } from "./camera";
+import { startCamera, stopCamera, waitForVideoMetadata } from "./camera";
 
 // ---------------------------------------------------------------------------
 // 1. ESTADO
@@ -18,6 +18,11 @@ let busy = false;
 
 /** Mensaje para el usuario. Cadena vacia = no hay nada que decir. */
 let statusMessage = "";
+let width: number = 0; 
+let height: number = 0;
+
+
+
 
 // ---------------------------------------------------------------------------
 // 2. REFERENCIAS AL DOM
@@ -44,7 +49,7 @@ function requireElement<T extends HTMLElement>(id: string): T {
 
 const cameraButton = requireElement<HTMLButtonElement>("camera-button");
 const statusText = requireElement<HTMLParagraphElement>("status");
-
+const videoElement = requireElement<HTMLVideoElement>("camera-stream");
 // ---------------------------------------------------------------------------
 // 3. RENDER: el unico sitio del programa que escribe en el DOM
 // ---------------------------------------------------------------------------
@@ -65,6 +70,9 @@ function renderUI(): void {
     cameraButton.textContent = "Abriendo camara...";
   } else if (cameraStream) {
     cameraButton.textContent = "Apagar camara";
+    if (videoElement.srcObject !== cameraStream) {
+      videoElement.srcObject = cameraStream;
+    }
   } else {
     cameraButton.textContent = "Encender camara";
   }
@@ -118,14 +126,15 @@ cameraButton.addEventListener("click", async () => {
   // --- Rama APAGAR: sincrona, no puede fallar, termina aqui.
   if (cameraStream) {
     stopCamera(cameraStream);
-    cameraStream = null; // la transicion de vuelta: sin esto, la variable mentiria
+    console.log(cameraStream.active);
+    cameraStream = null;
+    console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
     statusMessage = "";
     renderUI();
     return;
   }
 
   // --- Rama ENCENDER ---
-
   // Estas tres lineas son SINCRONAS y ocurren antes del await. Ahi se cierra
   // la carrera del doble click: JavaScript no interrumpe codigo sincrono, asi
   // que cuando llega la pausa del await el boton ya esta deshabilitado y no
@@ -136,6 +145,7 @@ cameraButton.addEventListener("click", async () => {
 
   try {
     cameraStream = await startCamera();
+    waitForVideoMetadata(videoElement);
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
     // usuario. En camera.ts no habia nada util que hacer con el error.
@@ -143,10 +153,20 @@ cameraButton.addEventListener("click", async () => {
   } finally {
     // `finally` corre haya ido bien o mal. Si solo rehabilitaramos el boton al
     // final del `try`, un permiso denegado lo dejaria muerto para siempre.
+    width = videoElement.videoWidth;
+    height = videoElement.videoHeight;
+    statusMessage = `Resolucion de la camara: ${width}x${height}`;
     busy = false;
     renderUI();
   }
 });
+
+
+
+
+
+
+
 
 // Primer pintado: sincroniza el HTML inicial con el estado real (apagada).
 renderUI();
