@@ -48,6 +48,11 @@ function requireElement<T extends HTMLElement>(id: string): T {
 const cameraButton = requireElement<HTMLButtonElement>("camera-button");
 const statusText = requireElement<HTMLParagraphElement>("status");
 const videoElement = requireElement<HTMLVideoElement>("camera-stream");
+const canvasElement = requireElement<HTMLCanvasElement>("view");
+const canvasContext = canvasElement.getContext("2d");
+if (!canvasContext) {
+  throw new Error("No se pudo obtener el contexto 2D del canvas");
+}
 // ---------------------------------------------------------------------------
 // 3. RENDER: el unico sitio del programa que escribe en el DOM
 // ---------------------------------------------------------------------------
@@ -65,7 +70,7 @@ const videoElement = requireElement<HTMLVideoElement>("camera-stream");
  */
 function renderUI(): void {
   
-  console.log("renderUI", { busy, cameraStream, statusMessage });
+  //console.log("renderUI", { busy, cameraStream, statusMessage });
   if (busy) {
     cameraButton.textContent = "Abriendo camara...";
   } else if (cameraStream) {
@@ -129,6 +134,7 @@ cameraButton.addEventListener("click", async () => {
     stopCamera(cameraStream);
     //console.log(cameraStream.active);
     cameraStream = null;
+    canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
     //console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
     statusMessage = "";
     renderUI();
@@ -148,6 +154,10 @@ cameraButton.addEventListener("click", async () => {
     cameraStream = await startCamera();
     renderUI(); // el stream ya esta vivo, pero aun no sabemos su resolucion
     await waitForVideoMetadata(videoElement);
+    canvasElement.width = 640;
+    canvasElement.height = Math.round((videoElement.videoHeight * 640) / videoElement.videoWidth);
+    canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+    console.log("canvas size", canvasElement.width, canvasElement.height);
     statusMessage = `Resolucion de la camara: ${videoElement.videoWidth}x${videoElement.videoHeight}`;
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
