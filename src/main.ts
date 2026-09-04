@@ -19,6 +19,9 @@ let busy = false;
 /** Mensaje para el usuario. Cadena vacia = no hay nada que decir. */
 let statusMessage = "";
 
+let rafId = 0;   // 0 = parado. requestAnimationFrame nunca devuelve 0
+
+
 
 
 
@@ -45,13 +48,24 @@ function requireElement<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
+function requie2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("No se pudo obtener el contexto 2D del canvas");
+  }
+  return context;
+}
+
 const cameraButton = requireElement<HTMLButtonElement>("camera-button");
 const statusText = requireElement<HTMLParagraphElement>("status");
 const videoElement = requireElement<HTMLVideoElement>("camera-stream");
 const canvasElement = requireElement<HTMLCanvasElement>("view");
-const canvasContext = canvasElement.getContext("2d");
-if (!canvasContext) {
-  throw new Error("No se pudo obtener el contexto 2D del canvas");
+
+const canvasContext = requie2dContext(canvasElement);
+
+function tick() {
+  canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+  rafId = requestAnimationFrame(tick);
 }
 // ---------------------------------------------------------------------------
 // 3. RENDER: el unico sitio del programa que escribe en el DOM
@@ -134,6 +148,8 @@ cameraButton.addEventListener("click", async () => {
     stopCamera(cameraStream);
     //console.log(cameraStream.active);
     cameraStream = null;
+    cancelAnimationFrame(rafId);
+    rafId = 0;
     canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
     //console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
     statusMessage = "";
@@ -156,9 +172,8 @@ cameraButton.addEventListener("click", async () => {
     await waitForVideoMetadata(videoElement);
     canvasElement.width = 640;
     canvasElement.height = Math.round((videoElement.videoHeight * 640) / videoElement.videoWidth);
-    canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-    console.log("canvas size", canvasElement.width, canvasElement.height);
-    statusMessage = `Resolucion de la camara: ${videoElement.videoWidth}x${videoElement.videoHeight}`;
+    rafId = requestAnimationFrame(tick);
+    statusMessage = `canvas tick ${rafId}`;
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
     // usuario. En camera.ts no habia nada util que hacer con el error.
