@@ -18,8 +18,6 @@ let busy = false;
 
 /** Mensaje para el usuario. Cadena vacia = no hay nada que decir. */
 let statusMessage = "";
-let width: number = 0; 
-let height: number = 0;
 
 
 
@@ -66,13 +64,12 @@ const videoElement = requireElement<HTMLVideoElement>("camera-stream");
  * la escribe; en vanilla el que aplica el cambio eres tu.
  */
 function renderUI(): void {
+  
+  console.log("renderUI", { busy, cameraStream, statusMessage });
   if (busy) {
     cameraButton.textContent = "Abriendo camara...";
   } else if (cameraStream) {
     cameraButton.textContent = "Apagar camara";
-    if (videoElement.srcObject !== cameraStream) {
-      videoElement.srcObject = cameraStream;
-    }
   } else {
     cameraButton.textContent = "Encender camara";
   }
@@ -83,6 +80,10 @@ function renderUI(): void {
   cameraButton.disabled = busy;
 
   statusText.textContent = statusMessage;
+
+  if (videoElement.srcObject !== cameraStream) {
+    videoElement.srcObject = cameraStream;  
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -126,9 +127,9 @@ cameraButton.addEventListener("click", async () => {
   // --- Rama APAGAR: sincrona, no puede fallar, termina aqui.
   if (cameraStream) {
     stopCamera(cameraStream);
-    console.log(cameraStream.active);
+    //console.log(cameraStream.active);
     cameraStream = null;
-    console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
+    //console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
     statusMessage = "";
     renderUI();
     return;
@@ -145,7 +146,9 @@ cameraButton.addEventListener("click", async () => {
 
   try {
     cameraStream = await startCamera();
-    waitForVideoMetadata(videoElement);
+    renderUI(); // el stream ya esta vivo, pero aun no sabemos su resolucion
+    await waitForVideoMetadata(videoElement);
+    statusMessage = `Resolucion de la camara: ${videoElement.videoWidth}x${videoElement.videoHeight}`;
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
     // usuario. En camera.ts no habia nada util que hacer con el error.
@@ -153,9 +156,6 @@ cameraButton.addEventListener("click", async () => {
   } finally {
     // `finally` corre haya ido bien o mal. Si solo rehabilitaramos el boton al
     // final del `try`, un permiso denegado lo dejaria muerto para siempre.
-    width = videoElement.videoWidth;
-    height = videoElement.videoHeight;
-    statusMessage = `Resolucion de la camara: ${width}x${height}`;
     busy = false;
     renderUI();
   }
