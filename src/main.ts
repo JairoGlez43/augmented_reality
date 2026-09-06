@@ -21,6 +21,9 @@ let statusMessage = "";
 
 let rafId = 0;   // 0 = parado. requestAnimationFrame nunca devuelve 0
 
+/** Marca de tiempo del ultimo refresco del lector de brillo (throttling). */
+let lastProbeUpdate = 0;
+
 
 
 
@@ -48,8 +51,8 @@ function requireElement<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
-function requie2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
-  const context = canvas.getContext("2d");
+function require2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) {
     throw new Error("No se pudo obtener el contexto 2D del canvas");
   }
@@ -60,13 +63,53 @@ const cameraButton = requireElement<HTMLButtonElement>("camera-button");
 const statusText = requireElement<HTMLParagraphElement>("status");
 const videoElement = requireElement<HTMLVideoElement>("camera-stream");
 const canvasElement = requireElement<HTMLCanvasElement>("view");
+const probeText = requireElement<HTMLParagraphElement>("probe");
 
-const canvasContext = requie2dContext(canvasElement);
+const canvasContext = require2dContext(canvasElement);
 
-function tick() {
+/**
+ * Un frame del pipeline. La llama el navegador ~60 veces por segundo, justo
+ * antes de repintar la pantalla.
+ *
+ * `now` es el timestamp en milisegundos que requestAnimationFrame pasa al
+ * callback. Lo usamos para no escribir en el DOM 60 veces por segundo.
+ */
+function tick(now: number): void {
+  // 1. Copiar el frame actual del <video> al canvas.
   canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+  // 2. Leer UN solo pixel: el del centro exacto del canvas.
+  //    Pedir una region de 1x1 en vez del frame entero son 4 bytes en lugar de
+  //    ~900.000. En la Fase 1 si necesitaremos el frame completo.
+  //    (>> 1 es dividir entre 2 quedandose con la parte entera)
+  const centerPixel = canvasContext.getImageData(
+    canvasElement.width >> 1,
+    canvasElement.height >> 1,
+    1,
+    1,
+  );
+
+  // 3. De color a brillo.
+  //    Los coeficientes estandar son 0.299 R + 0.587 G + 0.114 B (el ojo
+  //    percibe el verde como ~59% del brillo y el azul solo como ~11%).
+  //    Aqui van multiplicados por 256 -> 77, 150, 29 (que suman 256 exactos),
+  //    y >> 8 divide entre 256 con la operacion mas barata que existe.
+  //    Al ser aritmetica entera no hace falta Math.round.
+  const [r, g, b] = centerPixel.data;
+  const gray = (77 * r + 150 * g + 29 * b) >> 8;
+
+  // 4. Mostrarlo, pero solo 5 veces por segundo: a 60 fps los digitos
+  //    parpadearian ilegibles y seria trabajo desperdiciado.
+  if (now - lastProbeUpdate > 200) {
+    lastProbeUpdate = now;
+    probeText.textContent = `Brillo del pixel central: ${gray} / 255`;
+  }
+
+  // 5. Apuntar la cita para el proximo frame. Esto es lo que realimenta el
+  //    bucle: sin esta linea, tick se ejecutaria una sola vez.
   rafId = requestAnimationFrame(tick);
 }
+
 // ---------------------------------------------------------------------------
 // 3. RENDER: el unico sitio del programa que escribe en el DOM
 // ---------------------------------------------------------------------------
@@ -151,7 +194,7 @@ cameraButton.addEventListener("click", async () => {
     cancelAnimationFrame(rafId);
     rafId = 0;
     canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    //console.log(cameraStream); // la transicion de vuelta: sin esto, la variable mentiria
+    probeText.textContent = ""; // el lector se apaga con el bucle
     statusMessage = "";
     renderUI();
     return;
