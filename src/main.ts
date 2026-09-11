@@ -24,6 +24,22 @@ let rafId = 0;   // 0 = parado. requestAnimationFrame nunca devuelve 0
 /** Marca de tiempo del ultimo refresco del lector de brillo (throttling). */
 let lastProbeUpdate = 0;
 
+/** Margen del umbral adaptativo: cuanto mas oscuro que su entorno debe ser un
+ *  pixel para contar como tinta. Se controla con el slider. */
+let margin = 10;
+
+/** Radio de la ventana: 15 -> se mira un cuadrado de 31x31 alrededor de cada
+ *  pixel. Debe ser mayor que el grosor del detalle a detectar, para que la
+ *  media represente el fondo de la zona y no el propio trazo. */
+const WINDOW_RADIUS = 15;
+
+/** Imagen en grises, 1 byte por pixel. Se reserva una vez y se reutiliza. */
+let grayBuffer = new Uint8ClampedArray(0);
+
+/** Tabla de sumas acumuladas: integral[y*width+x] = suma del rectangulo
+ *  (0,0)..(x,y), el ultimo incluido. Mismo tamano que la imagen. */
+let integral = new Uint32Array(0);
+
 
 
 
@@ -64,8 +80,13 @@ const statusText = requireElement<HTMLParagraphElement>("status");
 const videoElement = requireElement<HTMLVideoElement>("camera-stream");
 const canvasElement = requireElement<HTMLCanvasElement>("view");
 const probeText = requireElement<HTMLParagraphElement>("probe");
+const thresholdInput = requireElement<HTMLInputElement>("threshold");
 
 const canvasContext = require2dContext(canvasElement);
+
+thresholdInput.addEventListener("input", () => {
+  margin = thresholdInput.valueAsNumber;
+});
 
 /**
  * Un frame del pipeline. La llama el navegador ~60 veces por segundo, justo
@@ -75,38 +96,108 @@ const canvasContext = require2dContext(canvasElement);
  * callback. Lo usamos para no escribir en el DOM 60 veces por segundo.
  */
 function tick(now: number): void {
+  const startedAt = performance.now();
+
+  const width = canvasElement.width;
+  const height = canvasElement.height;
+  const pixelCount = width * height;
+
   // 1. Copiar el frame actual del <video> al canvas.
-  canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+  canvasContext.drawImage(videoElement, 0, 0, width, height);
 
-  // 2. Leer UN solo pixel: el del centro exacto del canvas.
-  //    Pedir una region de 1x1 en vez del frame entero son 4 bytes en lugar de
-  //    ~900.000. En la Fase 1 si necesitaremos el frame completo.
-  //    (>> 1 es dividir entre 2 quedandose con la parte entera)
-  const centerPixel = canvasContext.getImageData(
-    canvasElement.width >> 1,
-    canvasElement.height >> 1,
-    1,
-    1,
-  );
+  // 2. Leer TODOS los pixeles (RGBA, 4 bytes por pixel).
+  const frame = canvasContext.getImageData(0, 0, width, height);
+  const data = frame.data;
 
-  // 3. De color a brillo.
-  //    Los coeficientes estandar son 0.299 R + 0.587 G + 0.114 B (el ojo
-  //    percibe el verde como ~59% del brillo y el azul solo como ~11%).
-  //    Aqui van multiplicados por 256 -> 77, 150, 29 (que suman 256 exactos),
-  //    y >> 8 divide entre 256 con la operacion mas barata que existe.
-  //    Al ser aritmetica entera no hace falta Math.round.
-  const [r, g, b] = centerPixel.data;
-  const gray = (77 * r + 150 * g + 29 * b) >> 8;
-
-  // 4. Mostrarlo, pero solo 5 veces por segundo: a 60 fps los digitos
-  //    parpadearian ilegibles y seria trabajo desperdiciado.
-  if (now - lastProbeUpdate > 200) {
-    lastProbeUpdate = now;
-    probeText.textContent = `Brillo del pixel central: ${gray} / 255`;
+  // Los buffers se reservan UNA vez y se reutilizan: reservar cientos de KB
+  // sesenta veces por segundo haria trabajar al recolector sin parar.
+  if (grayBuffer.length !== pixelCount) {
+    grayBuffer = new Uint8ClampedArray(pixelCount);
+    // Uint32 y no Uint8: la suma de toda la imagen llega a ~58 millones.
+    integral = new Uint32Array(pixelCount);
   }
 
-  // 5. Apuntar la cita para el proximo frame. Esto es lo que realimenta el
-  //    bucle: sin esta linea, tick se ejecutaria una sola vez.
+  // 3. PASADA 1 -> a grises. `i` avanza de 4 en 4 sobre data (RGBA) y `p` de
+  //    1 en 1 sobre gray (1 byte por pixel).
+  for (let i = 0, p = 0; p < pixelCount; i += 4, p++) {
+    grayBuffer[p] = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+  }
+
+  // 4. PASADA 2 -> tabla de sumas acumuladas.
+  //    T(x,y) = suma de todos los pixeles del rectangulo (0,0)..(x,y), el
+  //    ultimo incluido. Se apoya en las tres celdas ya calculadas:
+  //
+  //      T(x,y) = gray(x,y) + T(x-1,y) + T(x,y-1) - T(x-1,y-1)
+  //                            izquierda   arriba    contado dos veces
+  //
+  //    Fuera de la imagen vale 0: "la suma de una fila que no existe".
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const rowAbove = row - width;
+
+    for (let x = 0; x < width; x++) {
+      const left = x > 0 ? integral[row + x - 1] : 0;
+      const up = y > 0 ? integral[rowAbove + x] : 0;
+      const upLeft = x > 0 && y > 0 ? integral[rowAbove + x - 1] : 0;
+
+      integral[row + x] = grayBuffer[row + x] + left + up - upLeft;
+    }
+  }
+
+  // Lectura de la tabla que devuelve 0 fuera de la imagen. Eso es lo que hace
+  // que la formula de abajo funcione igual en el borde que en el centro.
+  const at = (px: number, py: number): number =>
+    px < 0 || py < 0 ? 0 : integral[py * width + px];
+
+  // 5. PASADA 3 -> umbral adaptativo.
+  for (let y = 0; y < height; y++) {
+    // La ventana se recorta a los limites de la imagen.
+    const y0 = Math.max(0, y - WINDOW_RADIUS);
+    const y1 = Math.min(height - 1, y + WINDOW_RADIUS);
+
+    for (let x = 0; x < width; x++) {
+      const x0 = Math.max(0, x - WINDOW_RADIUS);
+      const x1 = Math.min(width - 1, x + WINDOW_RADIUS);
+
+      // Los cuatro terminos salen de combinar los dos bordes en x (x0-1 y x1)
+      // con los dos bordes en y (y0-1 y y1):
+      //
+      //     T(x1,y1)      todo el bloque desde el origen
+      //   - T(x0-1,y1)    la franja de la izquierda que sobra
+      //   - T(x1,y0-1)    la franja de arriba que sobra
+      //   + T(x0-1,y0-1)  la esquina, restada dos veces
+      //
+      // Son 4 lecturas tanto si el radio es 1 como si es 50.
+      const sum =
+        at(x1, y1) - at(x0 - 1, y1) - at(x1, y0 - 1) + at(x0 - 1, y0 - 1);
+
+      // Los pixeles REALES de la ventana, no (2r+1)^2: en una esquina la
+      // ventana recortada es mas pequena.
+      const count = (x1 - x0 + 1) * (y1 - y0 + 1);
+      const mean = sum / count;
+
+      const p = y * width + x;
+      const value = grayBuffer[p] < mean - margin ? 0 : 255;
+
+      const i = p * 4;
+      data[i] = value;
+      data[i + 1] = value;
+      data[i + 2] = value;
+    }
+  }
+
+  // 6. Devolver los pixeles al canvas.
+  canvasContext.putImageData(frame, 0, 0);
+
+  const elapsed = performance.now() - startedAt;
+
+  if (now - lastProbeUpdate > 200) {
+    lastProbeUpdate = now;
+    probeText.textContent =
+      `Margen C: ${margin}  |  radio: ${WINDOW_RADIUS}  |  ` +
+      `tick: ${elapsed.toFixed(1)} ms  (presupuesto 16.6 ms)`;
+  }
+
   rafId = requestAnimationFrame(tick);
 }
 
