@@ -40,6 +40,8 @@ let grayBuffer = new Uint8ClampedArray(0);
  *  (0,0)..(x,y), el ultimo incluido. Mismo tamano que la imagen. */
 let integral = new Uint32Array(0);
 
+let binaryBuffer:Uint8Array = new Uint8Array(0); /**1 = tinta, 0 = fondo*/
+
 
 
 
@@ -115,12 +117,14 @@ function tick(now: number): void {
     grayBuffer = new Uint8ClampedArray(pixelCount);
     // Uint32 y no Uint8: la suma de toda la imagen llega a ~58 millones.
     integral = new Uint32Array(pixelCount);
+    binaryBuffer = new Uint8Array(pixelCount);
   }
 
   // 3. PASADA 1 -> a grises. `i` avanza de 4 en 4 sobre data (RGBA) y `p` de
   //    1 en 1 sobre gray (1 byte por pixel).
   for (let i = 0, p = 0; p < pixelCount; i += 4, p++) {
     grayBuffer[p] = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+    binaryBuffer[p] = grayBuffer[p] < 128 ? 1 : 0;
   }
 
   // 4. PASADA 2 -> tabla de sumas acumuladas.
@@ -177,7 +181,9 @@ function tick(now: number): void {
       const mean = sum / count;
 
       const p = y * width + x;
-      const value = grayBuffer[p] < mean - margin ? 0 : 255;
+      const isInk = grayBuffer[p] < mean - margin;
+      binaryBuffer[p] = isInk ? 1 : 0;
+      const value = isInk ? 0 : 255;
 
       const i = p * 4;
       data[i] = value;
