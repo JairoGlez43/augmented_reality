@@ -9,16 +9,26 @@
 | | |
 |---|---|
 | **Fase actual** | **2 — Contornos y cuadriláteros** |
-| **Paso actual** | **2A** — buffer binario aparte (no empezado) |
-| **Último commit** | `Fase 1: umbral adaptativo con tabla de sumas acumuladas` |
-| **Última sesión** | 2026-09-15 |
+| **Paso actual** | **2B** — regiones y bordes (en curso) |
+| **Último commit** | `feat: binaryBuffer added` (Paso 2A ✅) |
+| **Última sesión** | 2026-09-19 |
 | **Rendimiento** | `tick` ≈ 10-11 ms de 16.6 (F0+F1) |
 
 ## Siguiente acción concreta
 
-Leer en `CONTEXT.md` → *Fase 2 → Conceptos* y hacer el **Paso 2A**: crear
-`binaryBuffer: Uint8Array` (1 = tinta, 0 = fondo), reservado una vez, y
-escribir en él en la pasada 3. Criterio: la imagen se ve igual que antes.
+Terminar el **Paso 2B** con **`GUIA-FASE-2B.md`** (guía offline escrita el
+2026-09-19: teoría desde cero, simulaciones a mano y soluciones plegadas):
+
+1. Flood fill en `src/cv/contour.ts` (`labelRegions`, ya empezado) → pintar
+   cada región de un color y ver el contador en `#probe`.
+2. Añadir `area` + filtro `minArea`/`maxArea` → `findContours`.
+3. `traceBorder` (Moore) → puntos del borde en rojo.
+4. Buffers `labelsBuffer` y `stackBuffer` (`Int32Array(pixelCount)`) en
+   `main.ts`, reservados en el mismo `if` que `grayBuffer`.
+
+Dudas que quedaron resueltas en la sesión: el barrido no repite trabajo (la
+guarda `labels[p] !== 0` es O(1)); hay tres niveles de bucle (barrido → `while`
+de la pila → 8 vecinos); etiquetar al meter, no al sacar.
 
 ## Pendientes acumulados (no bloquean)
 

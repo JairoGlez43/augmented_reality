@@ -14,8 +14,11 @@
  * rechaza y ese rechazo sube hasta quien llamo, que es el unico que puede
  * explicarselo al usuario.
  */
-export const startCamera = (): Promise<MediaStream> =>
-  navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+export const startCamera = (): Promise<MediaStream> => {
+  console.log('hola');
+  return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+}
+  
 
 /**
  * Apaga la camara.
@@ -49,7 +52,9 @@ export function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
   // HAVE_METADATA es la constante 1 de la escala de readyState:
   //   0 HAVE_NOTHING  1 HAVE_METADATA  2 HAVE_CURRENT_DATA
   //   3 HAVE_FUTURE_DATA  4 HAVE_ENOUGH_DATA
+  console.log('hola estamos en metadato');
   if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    console.log('hola estamos en metadato, la primera condición se cumple');
     return Promise.resolve();
   }
 
@@ -62,6 +67,7 @@ export function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
     // Se envuelve en `() => resolve()` en vez de pasar `resolve` directamente
     // porque el listener recibe el objeto Event como argumento, y esta promesa
     // es Promise<void>: no queremos colar ese Event como valor resuelto.
+    console.log('hola estamos en metadato, la primera condición no se cumple');
     video.addEventListener("loadedmetadata", () => resolve(), { once: true });
   });
 }

@@ -1,4 +1,5 @@
 import { startCamera, stopCamera, waitForVideoMetadata } from "./camera";
+import { labelRegions } from "./cv/contour";
 
 // ---------------------------------------------------------------------------
 // 1. ESTADO
@@ -41,6 +42,10 @@ let grayBuffer = new Uint8ClampedArray(0);
 let integral = new Uint32Array(0);
 
 let binaryBuffer:Uint8Array = new Uint8Array(0); /**1 = tinta, 0 = fondo*/
+
+let labelsBuffer:Int32Array = new Int32Array(0);
+
+let stackBuffer:Int32Array = new Int32Array(0);
 
 
 
@@ -118,13 +123,14 @@ function tick(now: number): void {
     // Uint32 y no Uint8: la suma de toda la imagen llega a ~58 millones.
     integral = new Uint32Array(pixelCount);
     binaryBuffer = new Uint8Array(pixelCount);
+    labelsBuffer = new Int32Array(pixelCount);
+    stackBuffer = new Int32Array(pixelCount);
   }
 
   // 3. PASADA 1 -> a grises. `i` avanza de 4 en 4 sobre data (RGBA) y `p` de
   //    1 en 1 sobre gray (1 byte por pixel).
   for (let i = 0, p = 0; p < pixelCount; i += 4, p++) {
     grayBuffer[p] = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-    binaryBuffer[p] = grayBuffer[p] < 128 ? 1 : 0;
   }
 
   // 4. PASADA 2 -> tabla de sumas acumuladas.
@@ -192,6 +198,18 @@ function tick(now: number): void {
     }
   }
 
+  
+  const regionCount = labelRegions(binaryBuffer, width, height, labelsBuffer, stackBuffer);
+  console.log(regionCount);
+  for (let p = 0; p < pixelCount; p++) {
+    const label = labelsBuffer[p];
+    if (label === 0) continue;            // el fondo se queda como esta
+    const i = p * 4;
+    data[i]     = (label * 67)  % 256;
+    data[i + 1] = (label * 149) % 256;
+    data[i + 2] = (label * 211) % 256;
+  }
+
   // 6. Devolver los pixeles al canvas.
   canvasContext.putImageData(frame, 0, 0);
 
@@ -200,7 +218,7 @@ function tick(now: number): void {
   if (now - lastProbeUpdate > 200) {
     lastProbeUpdate = now;
     probeText.textContent =
-      `Margen C: ${margin}  |  radio: ${WINDOW_RADIUS}  |  ` +
+      `Margen C: ${margin}  |  regions: ${regionCount}  |  ` +
       `tick: ${elapsed.toFixed(1)} ms  (presupuesto 16.6 ms)`;
   }
 
@@ -310,9 +328,11 @@ cameraButton.addEventListener("click", async () => {
     cameraStream = await startCamera();
     renderUI(); // el stream ya esta vivo, pero aun no sabemos su resolucion
     await waitForVideoMetadata(videoElement);
+    console.log('salimos de metadata');
     canvasElement.width = 640;
     canvasElement.height = Math.round((videoElement.videoHeight * 640) / videoElement.videoWidth);
     rafId = requestAnimationFrame(tick);
+    console.log(rafId);
     statusMessage = `canvas tick ${rafId}`;
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
