@@ -89,6 +89,91 @@ F7 es la recompensa visual. F8–F11 lo convierten en producto.
 | **Vite + `strict: true`** | Plantilla estándar. `strict` obliga a tratar los `null`; `erasableSyntaxOnly` prohíbe `enum`, `namespace` y parameter properties (Vite solo borra tipos, no compila). |
 | **Three.js solo al final (F7)** | Primero el render en WebGL a pelo, para entender la matriz de proyección. Three.js después, solo para pintar bonito. |
 
+## Este repo es público (y es un escaparate)
+
+Decidido el 2026-09-20. El repo se publica en GitHub **con intención de que se
+vea y se use**, y cada fase cerrada alimenta una publicación en LinkedIn. Eso
+no cambia el objetivo de aprendizaje (Jairo escribe el código), pero sí añade
+una segunda vara de medir: **cada commit tiene que ser presentable**.
+
+### Las cuatro reglas
+
+1. **Todo lo público, en inglés.** Código, comentarios, nombres, README,
+   commits, el diagrama y los textos de la web. Sin acentos en los comentarios
+   (misma convención de siempre, ahora en inglés).
+   **Excepción:** `CONTEXT.md`, `MEMORY.md`, `GUIA-*.md` y el chat siguen en
+   español — son material de estudio de Jairo, no producto. Si algún día se
+   publican, se traducen entonces.
+2. **Clean y lean.** Cero dependencias de visión (ya lo era) y cero peso
+   muerto: nada de `style.css` de plantilla sin usar, nada de código comentado,
+   nada de "esto lo arreglo luego". Si no se usa, se borra.
+3. **Sin ruido de depuración.** Los `console.log` son andamios de una sesión,
+   no del repo. Lo que haya que ver se ve **en el canvas o en `#probe`**, que
+   además es la forma correcta de depurar visión. Estado actual: **17 llamadas
+   a `console.*` en `src/`** pendientes de limpiar.
+4. **Legibilidad revisada por fase.** Nombres que digan qué son, funciones que
+   quepan en la cabeza, y los comentarios que expliquen **por qué**, no qué.
+
+### Ritual de cierre de fase (añadido al método)
+
+Al cerrar cada fase, antes del commit final:
+
+```
+1. Limpieza       quitar console.*, código muerto, TODOs cumplidos
+2. Legibilidad    releer los ficheros tocados como si fueran de otro
+3. Comentarios    los que quedan, en ingles y explicando el porque
+4. Journey        añadir la "diapositiva" de la fase (ver abajo)
+5. README         actualizar si la fase cambia lo que el proyecto hace
+6. MEMORY/CONTEXT actualizar como siempre
+```
+
+No se acumula: una fase sucia arrastra la siguiente.
+
+### Los dos documentos públicos
+
+**`README.md` — el "violento".** Se escribe pronto (no en F11) y se mantiene.
+Tiene que convencer en 10 segundos de scroll:
+
+- GIF del resultado **arriba del todo**, antes de una sola línea de texto.
+- Una frase que diga qué es y qué tiene de raro: *AR marcador→pose 3D, cero
+  librerías de visión, ~700 líneas de TypeScript, 60 fps en el móvil*.
+- Enlace a la demo (HTTPS) y al marcador imprimible.
+- El diagrama del pipeline (el de arriba, en inglés).
+- **Números:** ms por etapa, en PC y en móvil. Un README con benchmarks se
+  cree; uno con adjetivos, no.
+- **"What I implemented from scratch / what I didn't"**, honesto. Esa sección
+  es la que lee un ingeniero.
+- Cómo correrlo, en tres líneas.
+
+**`docs/journey.md` — el de las diapositivas.** El making-of, en inglés, con
+formato de deck: **una diapositiva por problema resuelto**, no por fase. Cada
+una con la misma plantilla, que es exactamente la de un post de LinkedIn:
+
+```
+## <N>. <El problema en una frase>
+Symptom   — qué se veía (captura o GIF del fallo)
+Cause     — por qué pasaba
+Fix       — la idea, no el código
+Result    — el número antes → después
+```
+
+Ejemplo ya disponible: *"Adaptive threshold at 300 ms/frame"* → integral image
+→ *300 ms → 10 ms*. Eso es un post entero, y ya está vivido.
+
+Se escribe **en caliente**, al cerrar cada fase, no al final: los síntomas y
+los números se pierden. Sirve para tres cosas a la vez: el post de LinkedIn,
+la sección larga del README, y el guion de la entrevista.
+
+**Formato:** Markdown en el repo (una versión), y de ahí salen las imágenes del
+post. Nada de mantener dos copias divergentes.
+
+### Qué NO hacer
+
+- Inflar el README con teoría: eso vive en `docs/journey.md` y en los posts.
+- Publicar una fase a medias. Se publica cuando el criterio ✅ pasa.
+- Reescribir el historial de commits para que parezca limpio. Los mensajes en
+  inglés y en imperativo desde ahora; lo viejo se queda.
+
 ## Estructura del repo
 
 ```
@@ -96,6 +181,8 @@ index.html            UI fija: <video> (oculto al final), <canvas>, botón, slid
 src/main.ts           estado, renderUI(), el bucle tick(), cableado del DOM
 src/camera.ts         startCamera(), stopCamera(), waitForVideoMetadata()
 src/cv/               (a partir de F2) módulos de visión: contours, polygon, homography...
+README.md             (público, inglés) GIF, pitch, diagrama, benchmarks, honestidad
+docs/journey.md       (público, inglés) el making-of en diapositivas: problema → fix → número
 CLAUDE.md             cómo trabaja Claude en este repo
 CONTEXT.md            este archivo: el temario
 MEMORY.md             estado actual: dónde estamos, qué falta, notas
@@ -1335,9 +1422,13 @@ AR sobre una **imagen natural** (la portada de un libro) en vez de un marcador.
 
 ## Fase 11 — Producto y portafolio
 
+> El README y `docs/journey.md` **no empiezan aquí**: se mantienen desde ahora
+> en cada cierre de fase (ver "Este repo es público" en la PARTE I). F11 es el
+> pulido final, no la primera escritura.
+
 - **Deploy** en GitHub Pages / Vercel (HTTPS obligatorio para la cámara).
-- **README** con GIF del resultado, diagrama del pipeline, y una sección
-  "qué implementé desde cero y qué no" (honesta).
+- **README** pulido: GIF arriba, benchmarks reales de PC y móvil, y la sección
+  "what I implemented from scratch / what I didn't" repasada al final.
 - **Marcadores descargables** (los SVG de F4) en la propia página.
 - **Tests con Vitest:** homografía (identidad, ida y vuelta), decodificación
   (todas las rotaciones), pose sintética (proyectar un cubo conocido y

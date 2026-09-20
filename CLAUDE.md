@@ -12,9 +12,12 @@ sabiendo implementarlo desde cero.
    lecciones), lo que falta (objetivo, conceptos, tareas, pistas, criterios) y
    las soluciones verificadas de las dos fases siguientes.
 
-Al cerrar cada paso: actualizar `MEMORY.md`. Al cerrar una fase: actualizar
-también `CONTEXT.md` (sección "Lo hecho" + solución verificada de la fase
-siguiente-siguiente, compilada y probada antes de escribirla).
+Al cerrar cada paso: actualizar `MEMORY.md`. Al cerrar una fase: pasar el
+**ritual de cierre** de `CONTEXT.md` (limpieza de `console.*` y código muerto,
+legibilidad, comentarios en inglés, diapositiva en `docs/journey.md`, README si
+procede) y actualizar también `CONTEXT.md` (sección "Lo hecho" + solución
+verificada de la fase siguiente-siguiente, compilada y probada antes de
+escribirla).
 
 ## Reparto de roles
 
@@ -38,8 +41,11 @@ implementar explicando cada línea y simulando la ejecución paso a paso.
   realistas), mostrar primero **su** idea funcionando o fallando con esos
   números, y construir la solución **idea a idea**, no de golpe.
 - **Un archivo por vez**, y siempre explicando el porqué antes de escribirlo.
-- Idioma: español. Identificadores en inglés, comentarios en español sin
-  acentos (así los escribe él), docs con acentos.
+- **Idioma.** El chat, con Jairo, en español. Todo lo que se publica
+  (código, comentarios, nombres, `README.md`, `docs/journey.md`, mensajes de
+  commit) en **inglés, sin acentos en los comentarios**. Material de estudio
+  (`CONTEXT.md`, `MEMORY.md`, `GUIA-*.md`), en español con acentos.
+  El repo es público: ver "Este repo es público" en `CONTEXT.md`.
 
 ## Convenciones del código
 

@@ -10,6 +10,12 @@
 
 // Los 8 vecinos. En pantalla la `y` crece hacia ABAJO, asi que "abajo" es +1.
 //            E   SE  S   SO  O   NO  N  NE
+interface Area {
+  x: number;
+  y: number;
+  label: number;
+}
+
 const DX = [ 1,  1,  0, -1, -1, -1,  0,  1];
 const DY = [ 0,  1,  1,  1,  0, -1, -1, -1];
 
@@ -21,39 +27,45 @@ export function labelRegions(
   labels: Int32Array,
   stack: Int32Array,
 ): number {
-  labels.fill(0);          // borrar las etiquetas del frame anterior
-  let nextLabel = 1;       // 0 esta reservado para el fondo
-
+  labels.fill(0);
+  let nextLabel = 1; 
+  let areas: Area[] = [];
   // EL BARRIDO
   for (let p = 0; p <= binary.length-1; p++) {
     // TODO: si no es tinta, o ya tiene etiqueta, saltar al siguiente
     if(binary[p] === 0 || labels[p] !== 0){
         continue;
     }
-    let label = nextLabel++;
+    const label = nextLabel++;
     let stackSize = 0;
 
     stack[stackSize++] = p;
     labels[p] = label;
 
-    while(stackSize>0){
+    //console.log(labels);
+    //console.log(stackSize, stack);
+    while(stackSize > 0){
         let pos = stack[--stackSize];
         let xPos = pos % width;
         let yPos = (pos - xPos) / width;
+        //console.log(xPos, yPos, pos);
         for(let i = 0; i <= DX.length-1; i++){
             const nx = xPos + DX[i];
             const ny = yPos + DY[i];
-            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+                //console.log('descartamos vecinos fuera de rango');
+                continue;
+            }
             const n = ny * width + nx;
-            if(binary[n] === 1){
-                labels[n] === label;
+            if(binary[n] === 1 && labels[n] === 0){
+                labels[n] = label;
                 stack[stackSize++] = n;
             }
         }
 
     }
-
+    //console.log('salimos del while');
   }
-
+  //console.log('justo antes del return', labels);
   return nextLabel - 1;    // cuantas etiquetas se han repartido
 }

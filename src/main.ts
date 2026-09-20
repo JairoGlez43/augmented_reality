@@ -198,9 +198,9 @@ function tick(now: number): void {
     }
   }
 
-  
+  console.log('vamos pa regionCount');
   const regionCount = labelRegions(binaryBuffer, width, height, labelsBuffer, stackBuffer);
-  console.log(regionCount);
+  console.log('no salimos de regionCount');
   for (let p = 0; p < pixelCount; p++) {
     const label = labelsBuffer[p];
     if (label === 0) continue;            // el fondo se queda como esta

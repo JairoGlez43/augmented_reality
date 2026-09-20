@@ -32,6 +32,11 @@ de la pila → 8 vecinos); etiquetar al meter, no al sacar.
 
 ## Pendientes acumulados (no bloquean)
 
+- [ ] **Repo público** (decidido 2026-09-20, ver CONTEXT.md → "Este repo es
+      público"): pasar código y comentarios a inglés, quitar los 17
+      `console.*` de `src/`, escribir `README.md` y `docs/journey.md`. La
+      diapositiva de F1 (300 ms → 10 ms con tabla integral) es la primera y ya
+      está vivida. Se hace al cerrar F2, no ahora: no interrumpir el paso 2B.
 - [ ] Ocultar el `<video>` (`display: none`) y comprobar que el canvas sigue
       pintando. Si deja de hacerlo, avisar a Claude: hay un matiz.
 - [ ] `tick` en 10-11 ms deja poco margen para F2-F7. Se recorta en F9
