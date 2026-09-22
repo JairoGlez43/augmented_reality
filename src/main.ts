@@ -1,5 +1,5 @@
 import { startCamera, stopCamera, waitForVideoMetadata } from "./camera";
-import { labelRegions } from "./cv/contour";
+import { findContours } from "./cv/contour";
 
 // ---------------------------------------------------------------------------
 // 1. ESTADO
@@ -20,7 +20,7 @@ let busy = false;
 /** Mensaje para el usuario. Cadena vacia = no hay nada que decir. */
 let statusMessage = "";
 
-let rafId = 0;   // 0 = parado. requestAnimationFrame nunca devuelve 0
+let rafId = 0; // 0 = parado. requestAnimationFrame nunca devuelve 0
 
 /** Marca de tiempo del ultimo refresco del lector de brillo (throttling). */
 let lastProbeUpdate = 0;
@@ -34,6 +34,14 @@ let margin = 10;
  *  media represente el fondo de la zona y no el propio trazo. */
 const WINDOW_RADIUS = 15;
 
+/** Smallest region worth looking at, in pixels. Below this it is sensor
+ *  noise: specks of 1-5 px scattered over the whole image. */
+const MIN_AREA = 100;
+
+/** Largest region worth looking at, as a fraction of the image. Anything
+ *  bigger is the table or the wall, not a marker. */
+const MAX_AREA_FRACTION = 0.25;
+
 /** Imagen en grises, 1 byte por pixel. Se reserva una vez y se reutiliza. */
 let grayBuffer = new Uint8ClampedArray(0);
 
@@ -41,15 +49,14 @@ let grayBuffer = new Uint8ClampedArray(0);
  *  (0,0)..(x,y), el ultimo incluido. Mismo tamano que la imagen. */
 let integral = new Uint32Array(0);
 
-let binaryBuffer:Uint8Array = new Uint8Array(0); /**1 = tinta, 0 = fondo*/
+/** Thresholded image, 1 byte per pixel: 1 = ink, 0 = background. */
+let binaryBuffer = new Uint8Array(0);
 
-let labelsBuffer:Int32Array = new Int32Array(0);
+/** Region label of each pixel (0 = background). Work buffer of findContours. */
+let labelsBuffer = new Int32Array(0);
 
-let stackBuffer:Int32Array = new Int32Array(0);
-
-
-
-
+/** Pending pixels of the flood fill. Work buffer of findContours. */
+let stackBuffer = new Int32Array(0);
 
 // ---------------------------------------------------------------------------
 // 2. REFERENCIAS AL DOM
@@ -198,19 +205,28 @@ function tick(now: number): void {
     }
   }
 
-  console.log('vamos pa regionCount');
-  const regionCount = labelRegions(binaryBuffer, width, height, labelsBuffer, stackBuffer);
-  console.log('no salimos de regionCount');
-  for (let p = 0; p < pixelCount; p++) {
-    const label = labelsBuffer[p];
-    if (label === 0) continue;            // el fondo se queda como esta
-    const i = p * 4;
-    data[i]     = (label * 67)  % 256;
-    data[i + 1] = (label * 149) % 256;
-    data[i + 2] = (label * 211) % 256;
+  // 6. PASS 4 -> connected regions and their outer border.
+  const contours = findContours(
+    binaryBuffer,
+    width,
+    height,
+    labelsBuffer,
+    stackBuffer,
+    MIN_AREA,
+    pixelCount * MAX_AREA_FRACTION,
+  );
+
+  // 7. Paint every border pixel red, on top of the thresholded frame.
+  for (const contour of contours) {
+    for (const point of contour.points) {
+      const i = (point.y * width + point.x) * 4;
+      data[i] = 255;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+    }
   }
 
-  // 6. Devolver los pixeles al canvas.
+  // 8. Devolver los pixeles al canvas.
   canvasContext.putImageData(frame, 0, 0);
 
   const elapsed = performance.now() - startedAt;
@@ -218,7 +234,7 @@ function tick(now: number): void {
   if (now - lastProbeUpdate > 200) {
     lastProbeUpdate = now;
     probeText.textContent =
-      `Margen C: ${margin}  |  regions: ${regionCount}  |  ` +
+      `Margen C: ${margin}  | contours: ${contours.length}  |  ` +
       `tick: ${elapsed.toFixed(1)} ms  (presupuesto 16.6 ms)`;
   }
 
@@ -241,8 +257,6 @@ function tick(now: number): void {
  * la escribe; en vanilla el que aplica el cambio eres tu.
  */
 function renderUI(): void {
-  
-  //console.log("renderUI", { busy, cameraStream, statusMessage });
   if (busy) {
     cameraButton.textContent = "Abriendo camara...";
   } else if (cameraStream) {
@@ -259,7 +273,7 @@ function renderUI(): void {
   statusText.textContent = statusMessage;
 
   if (videoElement.srcObject !== cameraStream) {
-    videoElement.srcObject = cameraStream;  
+    videoElement.srcObject = cameraStream;
   }
 }
 
@@ -304,7 +318,6 @@ cameraButton.addEventListener("click", async () => {
   // --- Rama APAGAR: sincrona, no puede fallar, termina aqui.
   if (cameraStream) {
     stopCamera(cameraStream);
-    //console.log(cameraStream.active);
     cameraStream = null;
     cancelAnimationFrame(rafId);
     rafId = 0;
@@ -328,12 +341,11 @@ cameraButton.addEventListener("click", async () => {
     cameraStream = await startCamera();
     renderUI(); // el stream ya esta vivo, pero aun no sabemos su resolucion
     await waitForVideoMetadata(videoElement);
-    console.log('salimos de metadata');
     canvasElement.width = 640;
-    canvasElement.height = Math.round((videoElement.videoHeight * 640) / videoElement.videoWidth);
+    canvasElement.height = Math.round(
+      (videoElement.videoHeight * 640) / videoElement.videoWidth,
+    );
     rafId = requestAnimationFrame(tick);
-    console.log(rafId);
-    statusMessage = `canvas tick ${rafId}`;
   } catch (error) {
     // Aqui SI capturamos, porque aqui si podemos hacer algo: mostrarselo al
     // usuario. En camera.ts no habia nada util que hacer con el error.
@@ -345,13 +357,6 @@ cameraButton.addEventListener("click", async () => {
     renderUI();
   }
 });
-
-
-
-
-
-
-
 
 // Primer pintado: sincroniza el HTML inicial con el estado real (apagada).
 renderUI();
