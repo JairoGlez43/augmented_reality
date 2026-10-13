@@ -28,7 +28,7 @@
 - [Parte 2 — Filtrar por tamaño](#parte-2)
 - [Parte 3 — El contorno ordenado (recorrido de Moore)](#parte-3)
 - [Parte 4 — Integración completa en main.ts](#parte-4)
-- [Parte 5 — Empezando la Fase 2C: Douglas–Peucker](#parte-5)
+- [Parte 5 — Siguiente paso: la Fase 2C](#parte-5)
 - [Apéndice A — Checklist de depuración (síntoma → causa)](#apendice-a)
 - [Apéndice B — Fórmulas de una línea](#apendice-b)
 - [Apéndice C — Glosario](#apendice-c)
@@ -1043,21 +1043,63 @@ La imagen mental exacta:
 > siempre tocando la pared. Así das la vuelta al contorno entero y acabas
 > volviendo al sitio donde empezaste.
 
-Traducido a algoritmo, en cada paso necesitas dos datos:
+En cada paso llevas **dos** datos, y son dos cosas **distintas a la vez**, no
+dos momentos de lo mismo:
 
-1. `(px, py)` — dónde estás (píxel de la mancha);
-2. `(bx, by)` — **el punto de apoyo**: el último píxel de fondo que
-   comprobaste. Es la "mano en la pared".
+```
+(px, py)  =  dónde están mis PIES    →  SIEMPRE un píxel de la mancha
+(bx, by)  =  dónde está mi MANO      →  SIEMPRE un píxel de FONDO
+```
 
 Y la regla del paso:
 
 > Mira tus 8 vecinos **en sentido horario, empezando justo después del punto de
-> apoyo**. El primero que pertenezca a la mancha es tu siguiente posición.
+> apoyo**. El primero que pertenezca a la mancha es tu siguiente posición
+> (`p`). El vecino que miraste **inmediatamente antes de ese, dentro de esa
+> misma vuelta**, es tu nuevo punto de apoyo (`b`) — y es fondo por fuerza,
+> porque si hubiera sido de la mancha te habrías parado ahí.
 
-## 3.3 Por qué el píxel inicial siempre tiene el Oeste libre
+### ⚠️ El malentendido clásico
 
-El recorrido necesita empezar con una "mano en la pared" **garantizada**. Ese
-regalo te lo hace el barrido, y merece la pena entender por qué.
+Es tentador leer `b` como *"de dónde vengo"*, es decir, el `p` del paso
+anterior. **Es falso, y rompe el algoritmo entero.**
+
+```
+❌ nuevo b = el p anterior          ← el p anterior es TINTA
+✅ nuevo b = el último vecino de FONDO mirado antes de encontrar la mancha
+```
+
+Tus pies y tu mano no van al mismo sitio: la mano se queda pegada a la pared
+mientras los pies avanzan por el borde.
+
+> **Invariante, y es tu mejor herramienta de depuración:**
+> **`b` es un píxel de fondo en todos los pasos, sin una sola excepción.**
+> Si en alguna iteración `b` cae sobre un píxel de la mancha, tienes un bug —
+> y lo tienes *ahí*, no diez pasos más adelante. Cuando implementes esto, mete
+> un `console.assert` temporal comprobándolo. Te ahorrará la tarde.
+
+## 3.3 Por dónde se puede empezar
+
+### No se puede empezar en cualquier píxel
+
+El algoritmo tiene una **precondición** de arranque, y son dos cosas:
+
+1. `p` tiene que ser un píxel **de borde**;
+2. `b` tiene que ser un vecino **de fondo** de `p`.
+
+Si eliges un píxel del interior de la mancha —por ejemplo el centro del
+cuadrado 3×3, `(2,2)`— sus 8 vecinos son tinta. **No existe ningún `b`
+válido.** No es que el recorrido dé un resultado malo: es que no hay pared
+donde apoyar la mano, así que no hay ninguna dirección desde la que empezar a
+girar. La precondición no se cumple y la pregunta "¿por dónde sigo?" no tiene
+respuesta.
+
+Por eso el recorrido **no puede arrancar en un píxel cualquiera de la mancha**.
+Necesita uno del que se sepa, de antemano, que tiene fondo al lado.
+
+### Y por qué el píxel del barrido siempre sirve
+
+Ese regalo te lo hace el barrido, y merece la pena entender por qué.
 
 El barrido va fila a fila (`y` creciente) y dentro de cada fila de izquierda a
 derecha (`x` creciente). Por tanto, el primer píxel de una mancha que encuentra
@@ -1298,6 +1340,26 @@ Dos cosas para fijar:
   a él se sale **sin** meterlo otra vez. Si no, el primer punto saldría
   duplicado y Douglas–Peucker vería un segmento de longitud 0.
 - Se usaron 8 pasos de los 26 permitidos.
+
+### Verificación de la invariante
+
+Recorre la columna del punto de apoyo paso a paso y comprueba en la imagen del
+apartado 3.1 que **todos son fondo**:
+
+| paso | pies `p` | mano `b` | ¿`b` es fondo? |
+|---|---|---|---|
+| 1 | (1,1) | (0,1) | sí, columna x=0 |
+| 2 | (2,1) | (2,0) | sí, fila y=0 |
+| 3 | (3,1) | (3,0) | sí, fila y=0 |
+| 4 | (3,2) | (4,2) | sí, columna x=4 |
+| 5 | (3,3) | (4,3) | sí, columna x=4 |
+| 6 | (2,3) | (2,4) | sí, fila y=4 |
+| 7 | (1,3) | (1,4) | sí, fila y=4 |
+| 8 | (1,2) | (0,2) | sí, columna x=0 |
+
+Ocho de ocho. Y fíjate en que **`b` nunca coincide con el `p` del paso
+anterior**: en el paso 2 los pies vienen de `(1,1)` pero la mano está en
+`(2,0)`. Son dos recorridos paralelos, uno por la mancha y otro por el fondo.
 
 ## 3.6 Simulación 2 — una línea de 1 píxel de grosor
 
@@ -1634,373 +1696,21 @@ si hace falta. Optimizar antes de medir es perder tiempo dos veces.
 
 <a name="parte-5"></a>
 
-# Parte 5 — Empezando la Fase 2C: Douglas–Peucker
-
-> Esta parte te deja el siguiente paso arrancado. Léela cuando la Parte 3 te
-> funcione en pantalla.
-
-## 5.1 El problema
-
-El contorno de un marcador de 200×200 tiene unos **800 puntos**. Tú quieres
-**4**: las esquinas. Y no puedes buscar "las esquinas" directamente, porque no
-sabes cuántas hay ni dónde están: puede ser un folio (4), una mano (30) o una
-moneda (redonda, infinitas).
-
-Lo que sí puedes hacer es **simplificar**: quitar todos los puntos que estén
-"casi en línea recta" con sus compañeros. Si al final quedan exactamente 4, es
-un cuadrilátero.
-
-## 5.2 La idea de Douglas–Peucker, con un dibujo
-
-```
-    A ·······················  B        cuerda A-B (recta entre los extremos)
-         ·   ·        ·
-           ·    ·  ·  ← el punto M, el MÁS ALEJADO de la cuerda
-```
-
-1. Traza la **cuerda** del primer al último punto.
-2. Busca el punto intermedio **más alejado** de esa cuerda. Llámalo `M`, y a su
-   distancia `dmax`.
-3. Si `dmax <= epsilon` → todos los intermedios están "casi en la cuerda":
-   **se tiran todos**, el tramo se resume en la recta A-B.
-4. Si `dmax > epsilon` → `M` es un vértice de verdad: **se conserva**, y se
-   repite el proceso en los dos tramos `A..M` y `M..B`.
-
-`epsilon` es "cuánto me permito equivocarme, en píxeles". Es lo único que
-decides tú.
-
-## 5.3 Distancia a la RECTA vs distancia al SEGMENTO
-
-Esta es la trampa del algoritmo. Ejemplo numérico:
-
-```
-segmento: A = (0,0) → B = (4,0)
-punto:    P = (6,1)
-
-    A────────B      P
-    0        4     6,1
-```
-
-- Distancia de P a la **recta infinita** que pasa por A y B (el eje X): **1**.
-- Distancia de P al **segmento** A-B (que se acaba en x=4):
-  `hypot(6−4, 1−0) = hypot(2,1) = 2.236`.
-
-El segundo es el bueno: P está *más allá* del final del segmento, así que lo
-que le queda cerca es **el extremo B**, no una recta imaginaria que sigue hasta
-el infinito.
-
-La cuenta que arregla esto es la **proyección recortada**:
-
-```
-t = ((P−A) · (B−A)) / |B−A|²        ← en qué fracción del segmento cae P
-```
-
-- `t = 0` → P se proyecta justo en A
-- `t = 1` → P se proyecta justo en B
-- `t = 0.5` → en el punto medio
-- `t < 0` o `t > 1` → **fuera del segmento**
-
-Con los números del ejemplo:
-
-```
-P−A = (6,1)      B−A = (4,0)      |B−A|² = 16
-t = (6*4 + 1*0) / 16 = 24/16 = 1.5      → se sale por la derecha
-t recortado a [0,1] → 1
-punto más cercano Q = A + 1*(B−A) = (4,0) = B
-distancia = hypot(6−4, 1−0) = 2.236  ✔
-```
-
-Y el caso degenerado: si `A == B`, entonces `|B−A|² = 0` y `t` sería una
-división por cero (`NaN`, que envenena todas las comparaciones en silencio,
-porque `NaN > epsilon` es `false` y nunca salta un error). Hay que
-cortocircuitarlo: si la longitud es 0, la distancia es la distancia a `A`.
-
-## 5.4 Simulación completa de Douglas–Peucker
-
-Polilínea **abierta** de 9 puntos, `epsilon = 1.5`:
-
-```
-índice:  0      1      2      3      4      5      6      7      8
-punto:  (0,0)  (1,1)  (2,0)  (3,0)  (4,3)  (5,0)  (6,0)  (7,0)  (8,0)
-
-  3 |                      P4
-  2 |                     /  \
-  1 |    P1              /    \
-  0 | P0    P2  P3      /      P5  P6  P7  P8
-    +-----------------------------------------
-      0  1  2  3  4  5  6  7  8
-```
-
-Se conservan siempre los extremos: `keep = {0, 8}`.
-
----
-
-**LLAMADA 1 — tramo (0, 8)**
-
-Cuerda de (0,0) a (8,0): es horizontal, así que la distancia es directamente
-`|y|`.
-
-| i | punto | distancia |
-|---|---|---|
-| 1 | (1,1) | 1 |
-| 2 | (2,0) | 0 |
-| 3 | (3,0) | 0 |
-| 4 | (4,3) | **3** ← máximo |
-| 5 | (5,0) | 0 |
-| 6 | (6,0) | 0 |
-| 7 | (7,0) | 0 |
-
-`dmax = 3 > 1.5` → **se conserva el índice 4**. Se generan los tramos
-`(0,4)` y `(4,8)`.
-
----
-
-**LLAMADA 2 — tramo (0, 4)**
-
-Cuerda de A=(0,0) a B=(4,3). Aquí ya no vale mirar la `y`: hay que usar la
-fórmula. Longitud del segmento = `hypot(4,3) = 5`. Para una cuerda, la
-distancia perpendicular es `|cruz| / longitud`, con
-`cruz = (B−A).x·(P−A).y − (B−A).y·(P−A).x = 4·Py − 3·Px`.
-
-| i | punto | cruz = 4·y − 3·x | distancia = \|cruz\|/5 |
-|---|---|---|---|
-| 1 | (1,1) | 4−3 = 1 | 0.2 |
-| 2 | (2,0) | 0−6 = −6 | 1.2 |
-| 3 | (3,0) | 0−9 = −9 | **1.8** ← máximo |
-
-`dmax = 1.8 > 1.5` → **se conserva el índice 3**. Tramos `(0,3)` y `(3,4)`.
-
----
-
-**LLAMADA 3 — tramo (0, 3)**
-
-Cuerda de (0,0) a (3,0), horizontal otra vez.
-
-| i | punto | distancia |
-|---|---|---|
-| 1 | (1,1) | 1 |
-| 2 | (2,0) | 0 |
-
-`dmax = 1 <= 1.5` → **no se conserva nada**. Los puntos 1 y 2 desaparecen: el
-tramo se aproxima por la recta (0,0)-(3,0).
-
----
-
-**LLAMADA 4 — tramo (3, 4)**
-
-Índices consecutivos: no hay ningún punto intermedio (`for i = 4; i < 4` no
-entra). Nada que hacer.
-
----
-
-**LLAMADA 5 — tramo (4, 8)**
-
-Cuerda de A=(4,3) a B=(8,0). `B−A = (4,−3)`, longitud 5.
-`cruz = 4·(y−3) − (−3)·(x−4) = 3x + 4y − 24`.
-
-| i | punto | cruz | distancia |
-|---|---|---|---|
-| 5 | (5,0) | 15+0−24 = −9 | **1.8** ← máximo |
-| 6 | (6,0) | 18−24 = −6 | 1.2 |
-| 7 | (7,0) | 21−24 = −3 | 0.6 |
-
-`dmax = 1.8 > 1.5` → **se conserva el índice 5**. Tramos `(4,5)` y `(5,8)`.
-
----
-
-**LLAMADA 6 — tramo (4, 5)**: consecutivos, nada.
-
-**LLAMADA 7 — tramo (5, 8)**: cuerda (5,0)-(8,0), horizontal.
-Distancias de (6,0) y (7,0) = 0. `dmax = 0 <= 1.5` → se tiran los dos.
-
----
-
-### Resultado
-
-```
-keep = {0, 3, 4, 5, 8}
-
-9 puntos  →  5 vértices:  (0,0) (3,0) (4,3) (5,0) (8,0)
-```
-
-El pico se ha conservado entero (con su base a cada lado, que es lo que le da
-forma) y el bultito pequeño de `(1,1)` ha desaparecido. Sube `epsilon` a 2 y
-verás que el resultado pasa a ser `(0,0) (4,3) (8,0)`: 3 vértices. Ese es el
-mando que controla cuánto simplificas.
-
-## 5.5 De recursivo a iterativo (con pila, otra vez)
-
-El algoritmo se describe solo como recursión ("repite el proceso a cada lado"),
-pero un contorno con miles de puntos puede anidar mucho, y la pila de llamadas
-de JavaScript no es infinita. Misma solución que en el flood fill: **pila
-propia**, aquí de **pares** `(a, b)`.
-
-```
-pending = [first, last]
-mientras pending no esté vacía:
-    b = pending.pop()
-    a = pending.pop()      ← OJO al orden: LIFO, sale primero el último metido
-    ...
-    si dmax > epsilon:
-        keep[farthest] = cierto
-        pending.push(a, farthest, farthest, b)   ← mete los DOS subtramos
-```
-
-Fíjate: se mete `(a, farthest)` y `(farthest, b)` como cuatro números seguidos.
-Y al sacar, **primero `b` y luego `a`**, porque una pila devuelve en orden
-inverso. Si los sacas al revés, procesarás tramos con `a > b` y el bucle
-interno no entrará nunca: contornos que se simplifican a dos puntos sin motivo
-aparente.
-
-En vez de construir listas nuevas en cada nivel, se marca en un array de
-booleanos `keep[]` y al final se recorre una sola vez en orden. Así los vértices
-salen **ordenados** sin tener que ordenarlos.
-
-## 5.6 El contorno cerrado
-
-Douglas–Peucker necesita un principio y un final. Tu contorno es un **ciclo**:
-el último punto es vecino del primero. Si le pasas `(0, n−1)` tal cual, la
-cuerda va del punto inicial al último… que están pegados, y el resultado no
-tiene ningún sentido.
-
-**La solución: partirlo en dos polilíneas abiertas.**
-
-1. Busca el punto `far` **más lejano** de `points[0]` (en distancia al cuadrado,
-   que te ahorras la raíz: para comparar, `d²` ordena igual que `d`).
-2. Eso te da dos mitades: `0..far` y `far..final`.
-3. Simplifica cada mitad por separado y une los resultados.
-
-Y un truco para no tratar el cierre como caso especial: añade una copia de
-`points[0]` al final del array (índice `n`). Así la segunda mitad es
-literalmente el tramo `(far, n)`, sin ninguna aritmética modular.
-
-Elegir el punto más lejano no es casualidad: garantiza que las dos mitades son
-tramos largos y bien definidos. Si partieras por un punto cualquiera podrías
-cortar justo en mitad de un lado recto, y ese corte se convertiría en un
-vértice falso.
-
-## 5.7 `epsilon` proporcional
-
-```ts
-const epsilon = 0.03 * contour.points.length;
-```
-
-Con un valor fijo (digamos 3 px), un marcador cercano de 800 puntos de
-perímetro se simplificaría demasiado poco, y uno lejano de 80 puntos demasiado.
-Haciéndolo proporcional al número de puntos (que es aproximadamente el
-perímetro), **el mismo marcador da el mismo polígono esté cerca o lejos**. Eso
-es lo que quieres: invariancia a la escala.
-
-## 5.8 Pseudocódigo de la Fase 2C
-
-<details>
-<summary>▶ Pseudocódigo</summary>
-
-```
-funcion distanceToSegment(p, a, b) -> numero
-    dx = b.x - a.x
-    dy = b.y - a.y
-    length2 = dx*dx + dy*dy
-    si length2 == 0:                     # a y b son el mismo punto
-        devolver hypot(p.x - a.x, p.y - a.y)
-    t = ((p.x - a.x)*dx + (p.y - a.y)*dy) / length2
-    t = recortar t a [0, 1]
-    qx = a.x + t*dx
-    qy = a.y + t*dy
-    devolver hypot(p.x - qx, p.y - qy)
-
-
-funcion simplifyRange(points, first, last, epsilon, keep)   # tramo ABIERTO
-    pending = [first, last]
-    mientras pending no vacia:
-        b = pending.pop()
-        a = pending.pop()
-        maxDistance = 0
-        farthest = -1
-        para i desde a+1 hasta b-1:
-            d = distanceToSegment(points[i], points[a], points[b])
-            si d > maxDistance:
-                maxDistance = d
-                farthest = i
-        si maxDistance > epsilon:
-            keep[farthest] = cierto
-            pending.push(a, farthest, farthest, b)
-
-
-funcion simplifyClosed(points, epsilon) -> lista de vertices
-    n = points.length
-    si n < 3: devolver copia de points
-
-    far = indice del punto mas lejano de points[0]     (comparando d^2)
-
-    extended = points + [ points[0] ]     # el cierre, como indice n
-    keep = array de n+1 booleanos a falso
-    keep[0] = keep[far] = keep[n] = cierto
-
-    simplifyRange(extended, 0,   far, epsilon, keep)
-    simplifyRange(extended, far, n,   epsilon, keep)
-
-    devolver [ points[i] para i en 0..n-1 si keep[i] ]
-```
-
-</details>
-
-## 5.9 Esqueleto de `src/cv/polygon.ts`
-
-<details>
-<summary>▶ Código — archivo nuevo, para empezar</summary>
-
-```ts
-/**
- * FASE 2C/2D: de un contorno de cientos de puntos a un poligono de pocos
- * vertices (Douglas-Peucker), y de ahi a "es un cuadrilatero valido o no".
- */
-import type { Point } from "./contour";
-
-/** Distancia de `p` al segmento a-b (al segmento, no a la recta infinita). */
-function distanceToSegment(p: Point, a: Point, b: Point): number {
-  // TODO 1: dx, dy, length2
-  // TODO 2: si length2 === 0, distancia a `a` y fuera
-  // TODO 3: t = proyeccion, recortada a [0,1]
-  // TODO 4: punto q sobre el segmento, y hypot
-  return 0;
-}
-
-function simplifyRange(
-  points: Point[],
-  first: number,
-  last: number,
-  epsilon: number,
-  keep: boolean[],
-): void {
-  // TODO: pila de pares, buscar el mas lejano, partir en dos
-}
-
-export function simplifyClosed(points: Point[], epsilon: number): Point[] {
-  // TODO: buscar `far`, extender con points[0], dos llamadas, recoger keep
-  return points.slice();
-}
-```
-
-Mientras los `TODO` estén vacíos, `tsc --noEmit` se va a quejar de funciones y
-parámetros sin usar (`noUnusedLocals`, `noUnusedParameters`). Es normal y
-desaparece al rellenar los cuerpos; el servidor de Vite no se para por eso,
-porque esbuild no comprueba tipos.
-
-Y en `tick`, después de `findContours`:
-
-```ts
-for (const contour of contours) {
-  const polygon = simplifyClosed(contour.points, 0.03 * contour.points.length);
-  // de momento: pintar los vertices en verde y ver cuantos salen
-}
-```
-
-**✅ Criterio del 2C:** un folio o un marcador deben dar **~4 vértices**; una
-mano, muchos; un vaso redondo, bastantes. Si todo te da 2 ó 3 vértices, tu
-`epsilon` es demasiado grande. Si todo te da 40, demasiado pequeño.
-
-</details>
+# Parte 5 — Siguiente paso: la Fase 2C
+
+La Fase 2C (de los cientos de puntos de cada contorno a sus pocas esquinas,
+con Douglas–Peucker) tiene su propia guía: **`GUIA-FASE-2C.md`**.
+
+Está escrita desde más abajo que esta: introduce cada concepto donde se usa
+(vectores, producto cruzado, proyección), prueba cada idea con números
+pequeños y recorre los callejones sin salida antes de llegar a la solución.
+Léela cuando la Parte 3 de esta guía te funcione en pantalla (borde rojo
+cerrado alrededor de cada mancha).
+
+Lo único que necesitas de aquí para empezarla: `contour.points` es una lista
+ordenada, horaria, con un punto por píxel de borde, que empieza en el píxel
+superior-izquierdo de la mancha. Y `interface Point` tendrá que llevar
+`export`.
 
 ---
 
@@ -2020,6 +1730,8 @@ mano, muchos; un vaso redondo, bastantes. Si todo te da 2 ó 3 vértices, tu
 | El contorno sale antihorario | tienes `DY` invertido: en pantalla Sur es **+1** |
 | El primer punto del contorno está duplicado | haces `push` antes de comprobar la vuelta al inicio |
 | Error "Direccion invalida (…)" | el punto de apoyo se calculó desde la posición **nueva** en vez de la vieja |
+| El contorno se va por dentro de la mancha, o no acaba nunca | estás poniendo `b` = el `p` anterior. `b` es siempre **fondo** (ver 3.2) |
+| El recorrido no arranca / `directionIndex` falla en el primer paso | estás empezando en un píxel interior, que no tiene ningún vecino de fondo (ver 3.3) |
 | `tick` se dispara a 30-50 ms | estás trazando bordes de las manchas de ruido: el `continue` del área tiene que ir **antes** |
 
 <a name="apendice-b"></a>
@@ -2077,8 +1789,15 @@ región. El orden es lo que lo distingue de un simple conjunto.
 **Vecindad de Moore.** Los 8 vecinos. Por extensión, el algoritmo de recorrido
 de borde que los examina en círculo.
 
-**Punto de apoyo (backtrack).** El último píxel de fondo comprobado. Es la
-"mano en la pared" que le dice al recorrido por dónde seguir.
+**Punto de apoyo (backtrack).** El último píxel **de fondo** comprobado antes
+de encontrar la mancha. Es la "mano en la pared" que le dice al recorrido por
+dónde seguir. **No** es el píxel anterior del contorno: ese es tinta, y el
+punto de apoyo es fondo siempre.
+
+**Precondición.** Lo que tiene que ser cierto para que un algoritmo pueda
+siquiera empezar. La del recorrido de Moore: el píxel inicial es de borde y se
+conoce un vecino suyo de fondo. Si no se cumple, no hay resultado malo — no hay
+resultado.
 
 **Douglas–Peucker.** Algoritmo de simplificación de polilíneas: conserva los
 puntos que se alejan de la cuerda más que `epsilon`.
